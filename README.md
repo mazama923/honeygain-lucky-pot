@@ -36,7 +36,7 @@ Set the following environment variables:
 3. Set the required environment variables (`HONEYGAIN_EMAIL` and `HONEYGAIN_PASSWORD`).
 4. Start the script:
    ```bash
-   ruby honeygain-lucky-pot.rb
+   ruby honeygain_lucky_pot.rb
    ```
 
 ### Running with Docker
@@ -46,6 +46,16 @@ Set the following environment variables:
       -e HONEYGAIN_EMAIL=... -e HONEYGAIN_PASSWORD=... \
       benlexa/honeygain-lucky-pot:latest
    ```
+
+Image available on [Docker Hub](https://hub.docker.com/repository/docker/benlexa/honeygain-lucky-pot/general).
+
+### CasaOS and ZimaOS
+
+Available in [mazimaos-appstore](https://github.com/mazama923/mazimaos-appstore).
+
+```bash
+https://github.com/mazama923/mazimaos-appstore/archive/refs/heads/main.zip
+```
 
 ## Disclaimer
 
