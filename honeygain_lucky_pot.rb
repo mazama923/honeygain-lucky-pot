@@ -1,15 +1,7 @@
-# frozen_string_literal: true
-
 #!/usr/bin/env ruby
 require 'ferrum'
 require 'logger'
 require 'rufus-scheduler'
-
-class SilentLogger < Logger
-  def error(msg = nil, level = nil)
-    warn "Rufus error: #{msg}" if msg && msg.to_s.include?('ProcessTimeoutError')
-  end
-end
 
 class HoneygainAutomation
   def initialize(email, password)
@@ -20,92 +12,62 @@ class HoneygainAutomation
   end
 
   def click_lucky_pot
-    @logger.info 'Starting Lucky Pot automation...'
+    @logger.info 'Starting automation with Ferrum...'
 
     browser = Ferrum::Browser.new(
       headless: true,
       window_size: [1920, 1080],
-      timeout: 60,
-      process_timeout: 30,
-      browser_options: {
-        'no-sandbox' => nil,
-        'disable-dev-shm-usage' => nil,
-        'disable-gpu' => nil,
-        'disable-extensions' => nil
-      }
+      timeout: 30
     )
-
-    max_retries = 2
-    retry_count = 0
 
     begin
       browser.go_to('https://dashboard.honeygain.com/')
-      sleep 3
+      sleep 5
 
       # Login
       @logger.info 'Logging in...'
-      browser.fill_in('input[name="email"]', @email)
-      browser.fill_in('input[name="password"]', @password)
-      browser.keyboard.press('Enter')  # Plus fiable que down(:Enter)
+      browser.at_css('input[name="email"]').focus.type(@email)
+      sleep 1
+      browser.at_css('input[name="password"]').focus.type(@password)
+      sleep 1
+      browser.keyboard.down(:Enter)
 
-      # Wair login + dashboard
-      browser.wait_for_selector('#dashboard', timeout: 30)  # Sélecteur dashboard Honeygain
-      sleep 2
+      sleep 3
+      browser.network.wait_for_idle
 
-      # Lucky Pot
-      @logger.info 'Searching Lucky Pot...'
-      if browser.wait_for_xpath("//button[.//span[contains(text(), 'Open Lucky Pot')]]", timeout: 15)
-        button = browser.at_xpath("//button[.//span[contains(text(), 'Open Lucky Pot')]]")
-        button.click
-        @logger.info "✓ Lucky Pot opened at #{Time.now}"
+      # wait and click Lucky Pot
+      @logger.info 'Searching for Lucky Pot...'
+      lucky_pot = browser.at_xpath("//button[.//span[contains(., 'Open Lucky Pot')]]")
+      if lucky_pot
+        lucky_pot.click
+        @logger.info "✓ Lucky Pot clicked at #{Time.now}"
       else
-        @logger.warn 'Lucky Pot not available (limit reached?)'
+        @logger.warn 'Lucky Pot button not available (maybe daily limit or not enough bandwidth)'
       end
-
-    rescue Ferrum::ProcessTimeoutError => e
-      retry_count += 1
-      if retry_count <= max_retries
-        @logger.warn "Process timeout, retry #{retry_count}/#{max_retries}"
-        sleep 5
-        retry
-      else
-        raise e
-      end
-    rescue Ferrum::TimeoutError, Ferrum::NodeNotFoundError => e
-      @logger.warn "Ferrum timeout/select error: #{e.message}"
     rescue StandardError => e
-      @logger.error "Unexpected error: #{e.message}"
+      @logger.error "Error: #{e.message}"
+      @logger.error e.backtrace.join("\n") if e.backtrace
     ensure
-      browser&.quit
+      browser.quit
     end
   end
 end
 
-# Checks env
 unless ENV['HONEYGAIN_EMAIL'] && ENV['HONEYGAIN_PASSWORD']
-  abort "Erreur: Set HONEYGAIN_EMAIL and HONEYGAIN_PASSWORD"
+  abort "Erreur: HONEYGAIN_EMAIL or HONEYGAIN_PASSWORD not define"
 end
 
-# Logger global propre
-$stdout.sync = true
-logger = Logger.new($stdout)
-logger.info 'Honeygain Lucky Pot scheduler started.'
-
-scheduler = Rufus::Scheduler.new(
-  frequency: 0.5,  # Check job toutes les 0.5s
-  pause: false
-)
+scheduler = Rufus::Scheduler.new
 
 scheduler.every '2h' do
-  begin
-    automation = HoneygainAutomation.new(
-      ENV['HONEYGAIN_PASSWORD'],
-      ENV['HONEYGAIN_EMAIL']  # Tu avais inversé !
-    )
-    automation.click_lucky_pot
-  rescue => e
-    logger.error "Job failed: #{e.message}"
-  end
+  automation = HoneygainAutomation.new(
+    ENV['HONEYGAIN_EMAIL'],
+    ENV['HONEYGAIN_PASSWORD']
+  )
+  automation.click_lucky_pot
 end
+
+@logger = Logger.new($stdout)
+@logger.info 'Honeygain scheduler started. Press Ctrl+C to stop.'
 
 scheduler.join
